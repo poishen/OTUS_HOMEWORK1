@@ -1,0 +1,24 @@
+Vagrant.configure("2") do |config|
+  # Выбор базового образа (box)
+  config.vm.box = "uba_test"
+
+  # Настройка проброса портов 
+  config.vm.network "forwarded_port", guest: 80, host: 8080
+
+  # Настройка виртуальной машины в VirtualBox
+  config.vm.provider "virtualbox" do |vb|
+    # Установка памяти 1024 МБ
+    vb.memory = "1024"
+    # Опционально: можно задать имя машины в интерфейсе VirtualBox
+    vb.name = "vagrant-test-dz"
+  end
+
+  # Подключение двух дополнительных дисков по 1 ГБ
+  # Первый диск
+  config.vm.disk :disk, size: "1GB", name: "disk1"
+  # Второй диск
+  config.vm.disk :disk, size: "1GB", name: "disk2"
+
+  # Запуск сценария провижининга для настройки дисков внутри ВМ
+  config.vm.provision "shell", path: "provision.sh"
+end
