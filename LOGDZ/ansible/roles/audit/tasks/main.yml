@@ -1,0 +1,5 @@
+- name: Add audit rule for nginx config
+  copy:
+    dest: /etc/audit/rules.d/nginx.rules
+    content: "-w /etc/nginx/ -p wa -k nginx_changes\n"
+  notify: restart auditd

@@ -1,0 +1,34 @@
+- name: Enable rsyslog network input
+  copy:
+    dest: /etc/rsyslog.d/server.conf
+    content: |
+      module(load="imudp")
+      input(type="imudp" port="514")
+
+      module(load="imtcp")
+      input(type="imtcp" port="514")
+  notify: restart rsyslog
+
+- name: Create log directory
+  file:
+    path: /var/log/remote
+    state: directory
+    owner: syslog
+    group: adm
+    mode: "0755"
+
+- name: Configure remote log template
+  copy:
+    dest: /etc/rsyslog.d/remote.conf
+    content: |
+      $template RemoteLogs,"/var/log/remote/%HOSTNAME%/%PROGRAMNAME%.log"
+
+      $CreateDirs on
+      $DirCreateMode 0755
+      $FileCreateMode 0644
+
+      if $fromhost-ip != '127.0.0.1' then {
+          action(type="omfile" dynaFile="RemoteLogs")
+          stop
+      }
+  notify: restart rsyslog

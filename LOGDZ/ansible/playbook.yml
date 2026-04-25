@@ -1,0 +1,16 @@
+- hosts: all
+  become: yes
+  roles:
+    - common
+
+- hosts: log
+  become: yes
+  roles:
+    - rsyslog_server
+
+- hosts: web
+  become: yes
+  roles:
+    - nginx
+    - rsyslog_client
+    - audit

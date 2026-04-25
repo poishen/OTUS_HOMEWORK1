@@ -1,0 +1,57 @@
+
+
+#- name: Save critical logs locally
+#  copy:
+#    dest: /etc/rsyslog.d/critical.conf
+#    content: "*.crit /var/log/critical.log\n *.crit @192.168.56.11:514\n"
+#  notify: restart rsyslog
+
+#- name: Send audit logs to server
+#  copy:
+#    dest: /etc/rsyslog.d/audit.conf
+#    content: |
+#      module(load="imfile")
+
+ #     input(type="imfile"
+ #           File="/var/log/audit/audit.log"
+ #           Tag="audit"
+ #           Severity="info"
+ #           Facility="local6")
+
+ #     local6.* @192.168.56.11:514
+ # notify: restart rsyslog
+
+- name: Configure rsyslog
+  template:
+    src: 90-forward.conf.j2
+    dest: /etc/rsyslog.d/90-forward.conf
+  notify: restart rsyslog
+
+- name: Configure rsyslog
+  template:
+    src: critical.conf.j2
+    dest: /etc/rsyslog.d/critical.conf
+  notify: restart rsyslog
+
+- name: Configure rsyslog
+  template:
+    src: audit.conf
+    dest: /etc/rsyslog.d/audit.conf
+  notify: restart rsyslog
+
+- name: Configure rsyslog
+  template:
+    src: nginx-forward.conf
+    dest: /etc/rsyslog.d/nginx-forward.conf
+  notify: restart rsyslog
+
+- name: Make a file critical.log
+  become: true
+  file:
+    path: /var/log/critical.log
+    state: touch
+    owner: syslog
+    group: adm
+    mode: 0664
+  notify: restart rsyslog
+
