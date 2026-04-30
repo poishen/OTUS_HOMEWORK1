@@ -1,0 +1,5 @@
+[bck]
+bck ansible_host=192.168.56.11
+
+[client]
+client ansible_host=192.168.56.10

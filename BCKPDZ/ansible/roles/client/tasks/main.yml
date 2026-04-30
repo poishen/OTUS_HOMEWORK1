@@ -1,0 +1,44 @@
+- name: Configure borg-backup.sh
+  template:
+    src: borg-backup.sh
+    dest: /usr/local/bin/borg-backup.sh
+
+
+- name: Set execute permission
+  ansible.builtin.file:
+    path: /usr/local/bin/borg-backup.sh
+    mode: "0755"
+
+- name: Configure backup daemon
+  template:
+    src: borg-backup.service
+    dest: /etc/systemd/system/borg-backup.service
+
+- name: Configure backup timer
+  template:
+    src: borg-backup.timer
+    dest: /etc/systemd/system/borg-backup.timer
+
+- name: Reload systemd daemon
+  ansible.builtin.systemd:
+    daemon_reload: true
+
+- name: Enable and start borg-backup timer
+  ansible.builtin.systemd:
+    name: borg-backup.timer
+    enabled: true
+    state: started
+
+#- name: Initialize borg repository
+#  ansible.builtin.command: >
+#    borg init --encryption=repokey borg@192.168.56.11:/var/backup/repo
+#  environment:
+#    BORG_PASSPHRASE: "123456"
+#    BORG_RSH: "sshpass -p '123456' ssh -o StrictHostKeyChecking=no"
+#- name: Initialize borg repository
+#  ansible.builtin.command: >
+#    borg init --encryption=repokey borg@192.168.56.11:/var/backup/repo
+#  environment:
+#    BORG_RSH: "sshpass -p '123456' ssh -o StrictHostKeyChecking=no"
+#  args:
+#    creates: /root/.borg_init_done

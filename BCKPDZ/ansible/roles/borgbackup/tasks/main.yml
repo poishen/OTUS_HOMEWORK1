@@ -1,0 +1,83 @@
+
+#    - name: Create empty image file
+#      ansible.builtin.shell: |
+#        dd if=/dev/zero of=/backup.img bs=1M count=2048
+#      args:
+#        creates: /backup.img
+
+#    - name: Format image as ext4
+#      ansible.builtin.shell: |
+#        mkfs.ext4 /backup.img
+#      args:
+#        creates: /backup.img
+
+#    - name: Make a directory
+#      ansible.builtin.shell: |
+#        mkdir -p /var/backup
+#    - name: Mount a directory
+#      ansible.builtin.shell: |
+#        mount -o loop /backup.img /var/backup
+    - name: Create image file
+      ansible.builtin.command: dd if=/dev/zero of=/backup.img bs=1M count=2048
+      args:
+        creates: /backup.img
+
+    - name: Create filesystem
+      ansible.builtin.filesystem:
+        fstype: ext4
+        dev: /backup.img
+
+    - name: Create mount point
+      ansible.builtin.file:
+        path: /var/backup
+        state: directory
+
+    - name: Mount backup storage
+      ansible.builtin.mount:
+        path: /var/backup
+        src: /backup.img
+        fstype: ext4
+        opts: loop
+        state: mounted
+
+    - name: Configure fstab
+      template:
+        src: fstab
+        dest: /etc/fstab
+
+    - name: Create borg user with home directory
+      ansible.builtin.user:
+        name: borg
+        shell: /bin/bash
+        create_home: true
+        state: present
+        password: "{{ '123456' | password_hash('sha512') }}"
+
+    - name: Create backup directory
+      ansible.builtin.file:
+        path: /var/backup/repo
+        state: directory
+        owner: borg
+        group: borg
+        mode: "0755"
+
+    - name: Ensure /var/backup exists
+      ansible.builtin.file:
+        path: /var/backup
+        state: directory
+        owner: borg
+        group: borg
+        mode: "0755"
+
+    - name: Init borg repo
+      ansible.builtin.command: >
+        borg init --encryption=repokey /var/backup/repo
+      environment:
+        BORG_PASSPHRASE: "123456"
+
+    - name: Fix borg repo ownership recursively
+      ansible.builtin.file:
+        path: /var/backup/repo
+        owner: borg
+        group: borg
+        recurse: yes

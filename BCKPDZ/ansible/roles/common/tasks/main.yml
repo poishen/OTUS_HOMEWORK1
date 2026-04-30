@@ -1,0 +1,7 @@
+- name: Install base packages
+  apt:
+    name:
+      - sshpass
+      - borgbackup
+    state: present
+    update_cache: yes
