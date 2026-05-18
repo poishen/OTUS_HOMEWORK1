@@ -1,0 +1,205 @@
+---
+- name: Configure PXE Server
+  hosts: pxeserver
+  become: yes
+  gather_facts: yes
+  vars:
+    tftp_root: /srv/tftp
+    images_dir: /srv/images
+    ks_dir: /srv/ks
+    ubuntu_version: trusty
+    ubuntu_version_full: "14.04.6"
+    #netboot_url: "http://archive.ubuntu.com/ubuntu/dists/{{ ubuntu_version_short }}/main/installer-amd64/current/legacy/netboot.tar.gz"
+    #iso_url: "https://releases.ubuntu.com/{{ ubuntu_version_short }}/ubuntu-{{ ubuntu_version_full }}-live-server-amd64.iso"
+  tasks:
+    - name: Wait for system to be ready
+      wait_for_connection:
+        timeout: 120
+
+    - name: Show all network interfaces
+      command: ip -br addr show
+      register: network_interfaces
+      changed_when: false
+
+    - name: Debug network interfaces
+      debug:
+        var: network_interfaces.stdout_lines
+
+    - name: Ensure DNS resolution works
+      copy:
+        content: |
+          nameserver 8.8.8.8
+          nameserver 1.1.1.1
+        dest: /etc/resolv.conf
+        mode: '0644'
+
+    - name: Test internet connectivity
+      command: ping -c 2 8.8.8.8
+      register: ping_test
+      ignore_errors: yes
+      changed_when: false
+
+    - name: Fail if no internet connectivity
+      fail:
+        msg: "No internet connectivity. Cannot proceed with installation."
+      when: ping_test.rc != 0
+
+    - name: Update apt cache
+      apt:
+        update_cache: yes
+        cache_valid_time: 0
+      retries: 5
+      delay: 10
+      register: apt_update
+      until: apt_update is success
+
+    - name: Install required packages
+      apt:
+        name:
+          - dnsmasq
+          - apache2
+          - wget
+          - tar
+          - curl
+          - python3
+        state: present
+      when: apt_update is success
+
+
+    - name: Create necessary directories
+      file:
+        path: "{{ item }}"
+        state: directory
+        mode: '0755'
+      loop:
+        - "{{ tftp_root }}"
+        - "{{ images_dir }}"
+        - "{{ ks_dir }}"
+        - "{{ tftp_root }}/amd64"
+        - "{{ tftp_root }}/amd64/pxelinux.cfg"
+        - "{{ tftp_root }}/amd64/grub"
+
+    - name: Download Ubuntu netboot files
+      get_url:
+        url: "https://releases.ubuntu.com/noble/ubuntu-24.04.4-netboot-amd64.tar.gz"
+        dest: "/tmp/netboot.tar.gz"
+        timeout: 300
+
+    - name: Extract netboot files
+      unarchive:
+        src: "/tmp/netboot.tar.gz"
+        dest: "{{ tftp_root }}"
+        remote_src: yes
+        creates: "{{ tftp_root }}/amd64/pxelinux.0"
+#    - name: Create symlinks for PXE files in tftp root
+#      file:
+#        src: "{{ tftp_root }}/{{ item.src }}"
+#        dest: "{{ tftp_root }}/{{ item.dest }}"
+#        state: link
+#        force: yes
+#      loop:
+#        - { src: "ubuntu-installer/amd64/linux", dest: "linux" }
+#        - { src: "ubuntu-installer/amd64/initrd.gz", dest: "initrd" }
+#        - { src: "ubuntu-installer/amd64/pxelinux.0", dest: "pxelinux.0" }
+#        - { src: "ubuntu-installer/amd64/pxelinux.cfg", dest: "pxelinux.cfg" }
+
+#    - name: Create symlinks for PXE files in tftp root
+#      file:
+#        src: "{{ tftp_root }}/{{ item.src }}"
+#        dest: "{{ tftp_root }}/{{ item.dest }}"
+#        state: link
+#        force: yes
+#      loop:
+#        - { src: "amd64/linux", dest: "linux" }
+#        - { src: "amd64/initrd", dest: "initrd" }
+#        - { src: "amd64/pxelinux.0", dest: "pxelinux.0" }
+#        - { src: "amd64/pxelinux.cfg", dest: "pxelinux.cfg" }
+
+    - name: Ensure pxelinux.cfg directory exists
+      file:
+        path: "{{ tftp_root }}/amd64/pxelinux.cfg"
+        state: directory
+        mode: '0755'
+
+    - name: Create PXE default configuration
+      template:
+        src: default.j2
+        dest: "{{ tftp_root }}/amd64/pxelinux.cfg/default"
+        mode: '0644'
+
+    - name: Download Ubuntu ISO
+      get_url:
+        url: "https://releases.ubuntu.com/noble/ubuntu-24.04.4-live-server-amd64.iso"
+        dest: "{{ images_dir }}/"
+        timeout: 600
+
+    - name: Configure dnsmasq PXE
+      template:
+        src: pxe.conf.j2
+        dest: /etc/dnsmasq.d/pxe.conf
+        mode: '0644'
+      notify: restart dnsmasq
+
+    - name: Configure Apache virtual host
+      template:
+        src: ks-server.conf.j2
+        dest: /etc/apache2/sites-available/ks-server.conf
+        mode: '0644'
+      notify: restart apache2
+
+    - name: Disable default Apache site
+      command: a2dissite 000-default.conf
+      ignore_errors: yes
+      notify: restart apache2
+
+    - name: Enable PXE Apache site
+      command: a2ensite ks-server.conf
+      notify: restart apache2
+
+    - name: Create PXE default configuration
+      template:
+        src: default.j2
+        dest: "{{ tftp_root }}/amd64/pxelinux.cfg/default"
+        mode: '0644'
+
+    - name: Create user-data for autoinstall
+      template:
+        src: user-data.j2
+        dest: "{{ ks_dir }}/user-data"
+        mode: '0644'
+
+    - name: Create empty meta-data file
+      copy:
+        content: ""
+        dest: "{{ ks_dir }}/meta-data"
+        force: no
+        mode: '0644'
+
+    - name: Create directory for pxelinux.cfg if not exists
+      file:
+        path: "{{ tftp_root }}/amd64/pxelinux.cfg"
+        state: directory
+        mode: '0755'
+
+    - name: Ensure apache2 is running
+      systemd:
+        name: apache2
+        state: started
+        enabled: yes
+
+    - name: Ensure dnsmasq is running
+      systemd:
+        name: dnsmasq
+        state: started
+        enabled: yes
+
+  handlers:
+    - name: restart dnsmasq
+      systemd:
+        name: dnsmasq
+        state: restarted
+
+    - name: restart apache2
+      systemd:
+        name: apache2
+        state: restarted

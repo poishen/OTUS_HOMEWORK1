@@ -1,0 +1,23 @@
+# Apache virtual host for PXE installation files
+
+<VirtualHost 10.0.0.20:80>
+    DocumentRoot /
+    
+    # Директория с ISO образом
+    <Directory {{ images_dir }}>
+        Options Indexes MultiViews
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    # Директория с файлами автоматической установки
+    <Directory {{ ks_dir }}>
+        Options Indexes MultiViews
+        AllowOverride All
+        Require all granted
+    </Directory>
+    
+    # Логирование
+    ErrorLog ${APACHE_LOG_DIR}/pxe-error.log
+    CustomLog ${APACHE_LOG_DIR}/pxe-access.log combined
+</VirtualHost>

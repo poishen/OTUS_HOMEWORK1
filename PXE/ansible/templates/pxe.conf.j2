@@ -1,0 +1,13 @@
+interface=eth1
+bind-interfaces
+
+# DHCP настройки
+dhcp-range=eth1,10.0.0.100,10.0.0.120
+
+# PXE загрузка
+dhcp-boot=pxelinux.0
+enable-tftp
+tftp-root=/srv/tftp/amd64
+
+# Логирование
+log-dhcp
