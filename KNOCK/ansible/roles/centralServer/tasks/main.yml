@@ -1,0 +1,16 @@
+---
+- name: Install nginx
+  apt:
+    name: nginx
+    state: present
+    update_cache: yes
+
+- name: Enable nginx
+  systemd:
+    name: nginx
+    enabled: yes
+    state: started
+
+#- name: Set default route
+#  shell: |
+#    ip route replace default via 192.168.0.1

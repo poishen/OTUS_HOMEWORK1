@@ -1,0 +1,10 @@
+---
+- name: Install knock client
+  apt:
+    name: knockd
+    state: present
+    update_cache: yes
+
+#- name: Set default route
+#  shell: |
+#    ip route replace default via 192.168.0.1

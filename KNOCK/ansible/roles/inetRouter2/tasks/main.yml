@@ -1,0 +1,19 @@
+---
+- name: Enable IP forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: yes
+
+- name: Configure DNAT
+  shell: |
+    iptables -t nat -A PREROUTING \
+      -p tcp --dport 8080 \
+      -j DNAT --to-destination 192.168.0.2:80
+  ignore_errors: true
+
+- name: Configure masquerade
+  shell: |
+    iptables -t nat -A POSTROUTING -j MASQUERADE
+  ignore_errors: true

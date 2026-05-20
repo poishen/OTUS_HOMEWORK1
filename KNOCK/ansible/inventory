@@ -1,0 +1,15 @@
+[inetRouter]
+inetRouter ansible_host=192.168.56.10
+
+[inetRouter2]
+inetRouter2 ansible_host=192.168.56.20
+
+[centralRouter]
+centralRouter ansible_host=192.168.56.30
+
+[centralServer]
+centralServer ansible_host=192.168.56.40
+
+[all:vars]
+ansible_user=vagrant
+ansible_python_interpreter=/usr/bin/python3

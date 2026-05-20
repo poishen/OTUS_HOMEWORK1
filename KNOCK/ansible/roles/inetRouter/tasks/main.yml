@@ -1,0 +1,103 @@
+---
+- name: Install knockd
+  apt:
+    name:
+      - knockd
+      - iptables-persistent
+    state: present
+    update_cache: yes
+
+- name: Enable IP forwarding
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: yes
+
+- name: Configure NAT
+  shell: |
+    iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE
+  ignore_errors: true
+
+#- name: Allow SSH from host-only network
+#  shell: |
+#    iptables -I INPUT \
+#      -s 10.0.2.0/24 \
+#      -p tcp \
+#      --dport 22 \
+#      -j ACCEPT
+
+#- name: Drop SSH from everywhere else
+#  shell: |
+#    iptables -A INPUT \
+#      -p tcp \
+#      --dport 22 \
+#      -j DROP
+
+#- name: Drop SSH by default
+#  shell: |
+#    iptables -A INPUT -p tcp --dport 22 -j DROP
+#  ignore_errors: true
+- name: Allow SSH from host-only network
+  shell: |
+    iptables -I INPUT \
+      -s 192.168.56.0/24 \
+      -d 192.168.56.10 \
+      -p tcp \
+      --dport 22 \
+      -j ACCEPT
+
+- name: Drop SSH on internal interface
+  shell: |
+    iptables -A INPUT \
+      -s 192.168.0.0/24 \
+      -p tcp \
+      --dport 22 \
+      -j DROP
+
+
+- name: Configure knockd
+  copy:
+    dest: /etc/knockd.conf
+    content: |
+      [options]
+          UseSyslog
+
+      [openSSH]
+          sequence    = 7000,8000,9000
+          seq_timeout = 15
+          command     = /usr/sbin/iptables -I INPUT -s %IP% -p tcp --dport 22 -j ACCEPT
+          tcpflags    = syn
+
+      [closeSSH]
+          sequence    = 9000,8000,7000
+          seq_timeout = 15
+          command     = /usr/sbin/iptables -D INPUT -s %IP% -p tcp --dport 22 -j ACCEPT
+          tcpflags    = syn
+
+- name: Configure knockd 2
+  copy:
+    dest: /etc/default/knockd
+    content: |
+      START_KNOCKD=1
+      KNOCKD_OPTS="-i enp0s10"
+
+
+- name: Enable knockd
+  lineinfile:
+    path: /etc/default/knockd
+    regexp: "^START_KNOCKD="
+    line: "START_KNOCKD=1"
+
+- name: Restart knockd
+  systemd:
+    name: knockd
+    enabled: yes
+    state: restarted
+
+#- name: Drop SSH from everywhere else
+#  shell: |
+#    iptables -A INPUT \
+#      -p tcp \
+#      --dport 22 \
+#      -j DROP

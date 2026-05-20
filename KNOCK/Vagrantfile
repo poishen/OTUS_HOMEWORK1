@@ -1,0 +1,86 @@
+Vagrant.configure("2") do |config|
+
+  BOX = "ubuntu/jammy64"
+
+  config.vm.box = BOX
+  config.vm.box_check_update = false
+
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = 512
+    vb.cpus = 1
+  end
+
+  # =====================================================
+  # inetRouter
+  # =====================================================
+  config.vm.define "inetRouter" do |vm|
+
+    vm.vm.hostname = "inetRouter"
+
+    vm.vm.network "private_network", ip: "192.168.10.10"
+    vm.vm.network "private_network", ip: "192.168.56.10"
+    vm.vm.network "private_network", ip: "192.168.0.90"
+
+    vm.vm.network "private_network",
+      ip: "192.168.255.1",
+      virtualbox__intnet: "router-net"
+
+    vm.vm.provision "ansible" do |ans|
+      ans.playbook = "ansible/playbook.yml"
+      ans.inventory_path = "ansible/inventory"
+      ans.limit = "inetRouter"
+    end
+  end
+
+  # =====================================================
+  # inetRouter2
+  # =====================================================
+  config.vm.define "inetRouter2" do |vm|
+
+    vm.vm.hostname = "inetRouter2"
+
+    vm.vm.network "private_network", ip: "192.168.56.20"
+    vm.vm.network "private_network", ip: "192.168.0.254"
+
+    vm.vm.provision "ansible" do |ans|
+      ans.playbook = "ansible/playbook.yml"
+      ans.inventory_path = "ansible/inventory"
+      ans.limit = "inetRouter2"
+    end
+  end
+
+  # =====================================================
+  # centralRouter
+  # =====================================================
+  config.vm.define "centralRouter" do |vm|
+
+    vm.vm.hostname = "centralRouter"
+
+    vm.vm.network "private_network", ip: "192.168.56.30"
+    vm.vm.network "private_network", ip: "192.168.0.10"
+
+    vm.vm.provision "ansible" do |ans|
+      ans.playbook = "ansible/playbook.yml"
+      ans.inventory_path = "ansible/inventory"
+      ans.limit = "centralRouter"
+    end
+  end
+
+  # =====================================================
+  # centralServer
+  # =====================================================
+  config.vm.define "centralServer" do |vm|
+
+    vm.vm.hostname = "centralServer"
+
+    vm.vm.network "private_network", ip: "192.168.56.40"
+    vm.vm.network "private_network", ip: "192.168.0.2"
+
+    vm.vm.provision "ansible" do |ans|
+      ans.playbook = "ansible/playbook.yml"
+      ans.inventory_path = "ansible/inventory"
+      ans.limit = "centralServer"
+    end
+  end
+
+end
