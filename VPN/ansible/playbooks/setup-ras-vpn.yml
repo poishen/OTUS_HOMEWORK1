@@ -1,0 +1,126 @@
+---
+- name: Setup OpenVPN RAS with certificates
+  hosts: ras-server
+  become: yes
+  vars:
+    ras_port: 1207
+    ras_network: "10.10.10.0 255.255.255.0"
+  tasks:
+    - name: Install packages
+      apt:
+        name:
+          - openvpn
+          - easy-rsa
+        state: present
+        update_cache: yes
+
+    - name: Initialize PKI directory
+      shell: |
+        cd /etc/openvpn
+        /usr/share/easy-rsa/easyrsa init-pki
+      args:
+        creates: /etc/openvpn/pki
+
+    - name: Build Certificate Authority (CA)
+      shell: |
+        cd /etc/openvpn
+        echo 'ca' | /usr/share/easy-rsa/easyrsa build-ca nopass
+      args:
+        creates: /etc/openvpn/pki/ca.crt
+
+    - name: Generate server key and request
+      shell: |
+        cd /etc/openvpn
+        echo 'rasvpn' | /usr/share/easy-rsa/easyrsa gen-req server nopass
+      args:
+        creates: /etc/openvpn/pki/private/server.key
+
+    - name: Sign server certificate
+      shell: |
+        cd /etc/openvpn
+        echo 'yes' | /usr/share/easy-rsa/easyrsa sign-req server server
+      args:
+        creates: /etc/openvpn/pki/issued/server.crt
+
+    - name: Generate Diffie-Hellman parameters
+      shell: |
+        cd /etc/openvpn
+        /usr/share/easy-rsa/easyrsa gen-dh
+      args:
+        creates: /etc/openvpn/pki/dh.pem
+
+    - name: Generate TLS auth key (optional)
+      shell: |
+        cd /etc/openvpn
+        openvpn --genkey secret ca.key
+      args:
+        creates: /etc/openvpn/ca.key
+
+    - name: Generate client key and request
+      shell: |
+        cd /etc/openvpn
+        echo 'client' | /usr/share/easy-rsa/easyrsa gen-req client nopass
+      args:
+        creates: /etc/openvpn/pki/private/client.key
+
+    - name: Sign client certificate
+      shell: |
+        cd /etc/openvpn
+        echo 'yes' | /usr/share/easy-rsa/easyrsa sign-req client client
+      args:
+        creates: /etc/openvpn/pki/issued/client.crt
+
+    - name: Create client config directory
+      file:
+        path: /etc/openvpn/client
+        state: directory
+
+    - name: Add iroute for client
+      copy:
+        dest: /etc/openvpn/client/client
+        content: "iroute 10.10.10.0 255.255.255.0"
+
+    - name: Create server.conf
+      copy:
+        dest: /etc/openvpn/server.conf
+        content: |
+          port {{ ras_port }}
+          proto udp
+          dev tun
+          ca /etc/openvpn/pki/ca.crt
+          cert /etc/openvpn/pki/issued/server.crt
+          key /etc/openvpn/pki/private/server.key
+          dh /etc/openvpn/pki/dh.pem
+          server {{ ras_network }}
+          ifconfig-pool-persist ipp.txt
+          client-to-client
+          client-config-dir /etc/openvpn/client
+          keepalive 10 120
+          comp-lzo
+          persist-key
+          persist-tun
+          status /var/log/openvpn-status.log
+          log /var/log/openvpn.log
+          verb 3
+        mode: '0644'
+
+    - name: Systemd unit for OpenVPN
+      copy:
+        dest: /etc/systemd/system/openvpn@.service
+        content: |
+          [Unit]
+          Description=OpenVPN Tunneling Application On %I
+          After=network.target
+          [Service]
+          Type=notify
+          PrivateTmp=true
+          ExecStart=/usr/sbin/openvpn --cd /etc/openvpn/ --config %i.conf
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Start and enable OpenVPN RAS
+      systemd:
+        name: openvpn@server
+        enabled: yes
+        state: started
+        daemon_reload: yes

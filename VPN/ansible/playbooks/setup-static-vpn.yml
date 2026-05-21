@@ -1,0 +1,89 @@
+---
+- name: Configure static OpenVPN (tap/tun)
+  hosts: all
+  become: yes
+  vars:
+    vpn_port: 1194
+    vpn_net_tap: "10.10.10.0/24"
+    vpn_server_tap: "10.10.10.1"
+    vpn_client_tap: "10.10.10.2"
+    vpn_server_tun: "10.10.10.1"
+    vpn_client_tun: "10.10.10.2"
+  tasks:
+    - name: Install required packages
+      apt:
+        name:
+          - openvpn
+          - iperf3
+        state: present
+        update_cache: yes
+
+    # Генерация статического ключа (только на сервере)
+    - name: Generate static key on server
+      command: openvpn --genkey secret /etc/openvpn/static.key
+      when: vpn_role == "server"
+      args:
+        creates: /etc/openvpn/static.key
+
+    # Копирование ключа с сервера на клиент
+    - name: Fetch static key from server
+      fetch:
+        src: /etc/openvpn/static.key
+        dest: /tmp/static.key
+        flat: yes
+      when: vpn_role == "server"
+
+    - name: Copy static key to client
+      copy:
+        src: /tmp/static.key
+        dest: /etc/openvpn/static.key
+        mode: '0600'
+      when: vpn_role == "client"
+
+    # Шаблоны конфигурации в зависимости от роли и режима
+    - name: Set server config for tap
+      template:
+        src: server_tap.conf.j2
+        dest: /etc/openvpn/server.conf
+      when: vpn_role == "server" and vpn_dev == "tap"
+
+    - name: Set server config for tun
+      template:
+        src: server_tun.conf.j2
+        dest: /etc/openvpn/server.conf
+      when: vpn_role == "server" and vpn_dev == "tun"
+
+    - name: Set client config for tap
+      template:
+        src: client_tap.conf.j2
+        dest: /etc/openvpn/client.conf
+      when: vpn_role == "client" and vpn_dev == "tap"
+
+    - name: Set client config for tun
+      template:
+        src: client_tun.conf.j2
+        dest: /etc/openvpn/client.conf
+      when: vpn_role == "client" and vpn_dev == "tun"
+
+    # Systemd сервис
+    - name: Create systemd unit for OpenVPN
+      copy:
+        dest: /etc/systemd/system/openvpn@.service
+        content: |
+          [Unit]
+          Description=OpenVPN Tunneling Application On %I
+          After=network.target
+          [Service]
+          Type=notify
+          PrivateTmp=true
+          ExecStart=/usr/sbin/openvpn --cd /etc/openvpn/ --config %i.conf
+          [Install]
+          WantedBy=multi-user.target
+        mode: '0644'
+
+    - name: Enable and start OpenVPN service
+      systemd:
+        name: "openvpn@{{ 'server' if vpn_role == 'server' else 'client' }}"
+        enabled: yes
+        state: started
+        daemon_reload: yes

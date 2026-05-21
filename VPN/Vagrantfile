@@ -1,0 +1,49 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "ubuntu/jammy64"
+
+  # Общие настройки провайдера
+  config.vm.provider "virtualbox" do |vb|
+    vb.memory = "512"
+    vb.cpus = 1
+  end
+
+  # ---- Статический VPN (сервер и клиент) ----
+  config.vm.define "server" do |server|
+    server.vm.hostname = "server.loc"
+    server.vm.network "private_network", ip: "192.168.56.10"
+    server.vm.provision "ansible" do |ansible|
+      ansible.playbook = "ansible/playbooks/setup-static-vpn.yml"
+      ansible.extra_vars = {
+        vpn_role: "server",
+        vpn_dev: "tap"           
+      }
+    end
+  end
+
+  config.vm.define "client" do |client|
+    client.vm.hostname = "client.loc"
+    client.vm.network "private_network", ip: "192.168.56.20"
+    client.vm.provision "ansible" do |ansible|
+      ansible.playbook = "ansible/playbooks/setup-static-vpn.yml"
+      ansible.extra_vars = {
+        vpn_role: "client",
+        vpn_dev: "tap",
+        server_ip: "192.168.56.10"
+      }
+    end
+  end
+
+  # ---- RAS-сервер (Remote Access) ----
+  config.vm.define "ras-server" do |ras|
+    ras.vm.hostname = "ras.loc"
+    ras.vm.network "private_network", ip: "192.168.56.30"
+    ras.vm.provision "ansible" do |ansible|
+      ansible.playbook = "ansible/playbooks/setup-ras-vpn.yml"
+    end
+  end
+
+  
+end

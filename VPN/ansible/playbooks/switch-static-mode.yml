@@ -1,0 +1,23 @@
+---
+- name: Switch OpenVPN static mode (tap/tun)
+  hosts: server,client
+  become: yes
+  vars:
+    new_dev: "{{ vpn_dev | default('tun') }}"
+  tasks:
+    - name: Update server config for new dev mode
+      template:
+        src: "server_{{ new_dev }}.conf.j2"
+        dest: /etc/openvpn/server.conf
+      when: inventory_hostname == "server"
+
+    - name: Update client config for new dev mode
+      template:
+        src: "client_{{ new_dev }}.conf.j2"
+        dest: /etc/openvpn/client.conf
+      when: inventory_hostname == "client"
+
+    - name: Restart OpenVPN service
+      systemd:
+        name: "openvpn@{{ 'server' if inventory_hostname == 'server' else 'client' }}"
+        state: restarted
